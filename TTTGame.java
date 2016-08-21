@@ -8,6 +8,13 @@ import java.util.concurrent.TimeUnit;
 
 import javax.swing.*;
 
+/**
+ * @author Mario Misiuna 
+ */
+
+/**
+ *  Thread used to finding best computer move
+ */
 class ComputerMove implements Runnable {
 	private static int counter = 0;
 	private final int id = counter++;

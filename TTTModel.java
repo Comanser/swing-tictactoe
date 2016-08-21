@@ -2,11 +2,19 @@ package games.tictactoe;
 
 import java.util.*;
 
+/**
+ * @author Mario Misiuna 
+ */
+
 enum Status { EMPTY, PLAYER_X, PLAYER_O, DRAW, IN_PROGRESS }
 
+/**
+ * Move holder 
+ */
 class Move {
 	private final int row;
 	private final int col;
+	Status score;
 	
 	public Move (int row, int col) {
 		this.row = row;
@@ -19,6 +27,14 @@ class Move {
 
 	public int getCol() {
 		return col;
+	}
+
+	public Status getScore() {
+		return score;
+	}
+
+	public void setScore(Status score) {
+		this.score = score;
 	}
 }
 
@@ -71,14 +87,6 @@ class TTTBoard implements Cloneable {
 	// Only for testing
 	public Status[][] getArray() {
 		return array;
-	}
-
-	public Status getTurn() {
-		return turn;
-	}
-
-	public void setTurn(Status turn) {
-		this.turn = turn;
 	}
 
 	/**
@@ -173,6 +181,21 @@ class TTTBoard implements Cloneable {
 		for (Status[] status : array)
 			str += "\n" + Arrays.toString(status);
 		return str;
+	}
+	
+	/**
+	 * @return current game turn
+	 */
+	public Status getTurn() {
+		return turn;
+	}
+
+	/**
+	 * Holding current game turn
+	 * @param turn
+	 */
+	public void setTurn(Status turn) {
+		this.turn = turn;
 	}
 }
 

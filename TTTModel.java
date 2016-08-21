@@ -2,10 +2,6 @@ package games.tictactoe;
 
 import java.util.*;
 
-import org.apache.commons.lang3.tuple.ImmutablePair;
-import org.apache.commons.lang3.tuple.Pair;
-
-
 enum Status { EMPTY, PLAYER_X, PLAYER_O, DRAW, IN_PROGRESS }
 
 class Move {
@@ -32,6 +28,7 @@ class Move {
 class TTTBoard implements Cloneable {
 	private final int dim;
 	private Status[][] array;
+	private Status turn = Status.PLAYER_X;
 	
 	/**
 	 * Initialize empty standard ([3, 3]) Tic Tac Toe game board
@@ -74,6 +71,14 @@ class TTTBoard implements Cloneable {
 	// Only for testing
 	public Status[][] getArray() {
 		return array;
+	}
+
+	public Status getTurn() {
+		return turn;
+	}
+
+	public void setTurn(Status turn) {
+		this.turn = turn;
 	}
 
 	/**

@@ -2,6 +2,8 @@ package games.tictactoe;
 
 import java.awt.*;
 import java.awt.event.*;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
 
 import javax.swing.*;
@@ -26,7 +28,8 @@ class ComputerMove implements Runnable {
 			System.out.println(this + " interrupted");
 			return;
 		}
-		board.nextMove();
+		//board.nextMove();
+		board.setTurn(Status.PLAYER_X);
 		System.out.println(this + " finished");
 	}
 
@@ -44,11 +47,16 @@ class ComputerMove implements Runnable {
  */
 class BoardWindow extends JDialog {
 	// Start with cross
-	private Status turn = Status.PLAYER_X;
+	private TTTBoard board;
+	ExecutorService executor = Executors.newSingleThreadExecutor();
+
 
 	// Initialize game board
 	BoardWindow(JFrame parent, int rows, int cols) {
 		super(parent, "Gameplay", true);
+		
+		// Initialize board model
+		board = new TTTBoard();
 		
 		// Setup active grids as panels in GridLayout Dialog window
 		setLayout(new GridLayout(rows, cols));  
@@ -78,10 +86,17 @@ class BoardWindow extends JDialog {
 			addMouseListener(new MouseAdapter() {
 				public void mousePressed(MouseEvent e) {
 					// Add game logic
-					if (status == Status.EMPTY) {
-						status = turn;
-						turn = (turn == Status.PLAYER_X ? Status.PLAYER_O : Status.PLAYER_X);
+					if (status == Status.EMPTY && board.getTurn() == Status.PLAYER_X) {
+						status = Status.PLAYER_X;
+						board.setTurn(Status.PLAYER_O);
 						repaint();
+						if (executor.isShutdown()) {
+							System.out.println("Start new queue");
+							executor = Executors.newSingleThreadExecutor();
+						}
+						ComputerMove task = new ComputerMove(board);
+						executor.execute(task);
+						System.out.println(task + " schedulled");
 					}
 				}
 			});

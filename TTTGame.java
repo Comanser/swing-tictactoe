@@ -2,27 +2,49 @@ package games.tictactoe;
 
 import java.awt.*;
 import java.awt.event.*;
+import javax.swing.*;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
 
-import javax.swing.*;
 
 /**
- * @author Mario Misiuna 
+ * @author Mario Misiuna
+ * General GUI design idea based on Bruce Eckiel
+ * TicTacToe.java printed in Thinking in Java book
  */
 
+class Utilities {
+	private Utilities() {};
+	
+	public static void showResult(Status status) {
+		String message = "";
+		switch (status) {
+		case DRAW:
+			message = "We have a Tie!";
+			break;
+		case PLAYER_O:
+			message = "Computer Won!";
+			break;
+		case PLAYER_X:
+			message = "Player Won!";
+			break;
+		default:
+			break;
+		}
+
+		JOptionPane.showMessageDialog(null,
+	            message, "Komunikat", JOptionPane.INFORMATION_MESSAGE);
+	}
+}
 /**
- *  Thread used to finding best computer move
+ * Thread used to finding out the best computer move
  */
 class ComputerMove implements Runnable {
 	private static int counter = 0;
 	private final int id = counter++;
-	private TTTBoard board;
+	private TTTBoard board; // current TTTBoard
 
-	/**
-	 * @param board - current TTTBoard
-	 */
 	public ComputerMove(TTTBoard board) {
 		this.board = board;
 	}
@@ -30,12 +52,23 @@ class ComputerMove implements Runnable {
 	public void run() {
 		System.out.println(this + " I'm thinking ...");
 		try {
-			TimeUnit.SECONDS.sleep(3);
+			TimeUnit.SECONDS.sleep(1);
 		} catch (InterruptedException e) {
 			System.out.println(this + " interrupted");
 			return;
 		}
-		//board.nextMove();
+		// Add game logic for computer move
+		Move move = board.doNextRandomMove();
+		if (move != null) {
+			board.getGridPanel(move.getRow(), move.getCol()).repaint();
+			System.out.println(board);
+			Status gameStatus = board.getGameStatus();
+			if (gameStatus != Status.IN_PROGRESS) {
+				Utilities.showResult(gameStatus);
+				board.reset();
+				board.repaint();
+			}
+		}
 		board.setTurn(Status.PLAYER_X);
 		System.out.println(this + " finished");
 	}
@@ -49,7 +82,7 @@ class ComputerMove implements Runnable {
 	}
 }
 
-/*
+/**
  * Game board window
  */
 class BoardWindow extends JDialog {
@@ -57,50 +90,70 @@ class BoardWindow extends JDialog {
 	private TTTBoard board;
 	ExecutorService executor = Executors.newSingleThreadExecutor();
 
-
 	// Initialize game board
-	BoardWindow(JFrame parent, int rows, int cols) {
+	BoardWindow(JFrame parent, int dim) {
 		super(parent, "Gameplay", true);
-		
+
 		// Initialize board model
-		board = new TTTBoard();
-		
-		// Setup active grids as panels in GridLayout Dialog window
-		setLayout(new GridLayout(rows, cols));  
-		for (int i = 0; i < cols * rows; i++)
-			add(new BoardGrid());
-		
-		//((limitMax - limitMin) * (value - baseMin) / (baseMax - baseMin)) + limitMin;
-		//int boxSize = (int) ( (15. * (Math.min(gridsWide, gridsHigh) - 3. ) / 3. ) + 90. );
-		
-		// Scale boxSize
-		//((limitMax - limitMin) * (baseMax - value) / (baseMax - baseMin)) + limitMin;
-		int boxSize = (int) ( (15 * (6 - Math.min(cols, rows)) / 3 ) + 90 );
+		board = new TTTBoard(dim);
 
-		setSize(cols * boxSize, rows * boxSize);
-		setDefaultCloseOperation(DISPOSE_ON_CLOSE);
+		// Setup active grids as JPanels in GridLayout Dialog window
+		setLayout(new GridLayout(dim, dim));
+		for (int i = 0; i < dim; i++) {
+			for (int j = 0; j < dim; j++) {
+				BoardGrid bg = new BoardGrid(i, j);
+				board.assignePanelToGrid(i, j, bg);
+				add(bg);
+			}
+		}
+
+		// ((limitMax - limitMin) * (baseMax - value) / (baseMax - baseMin)) + limitMin;
+		int boxSize = (int) ((15 * (6 - dim) / 3) + 90);
+
+		setSize(dim * boxSize, dim * boxSize);
+		// setDefaultCloseOperation(DISPOSE_ON_CLOSE);
+
+		// Shutdown computer move computation thread
+		addWindowListener(new WindowAdapter() {
+			@Override
+			public void windowClosing(WindowEvent e) {
+				executor.shutdownNow();
+				e.getWindow().dispose();
+			}
+		});
 	}
-
-	/*
+	
+	/**
 	 * Board grid
 	 */
-	class BoardGrid extends JPanel {
-		private Status status = Status.EMPTY;
+	public class BoardGrid extends JPanel {
+		private final int row, col;
 
 		// Initialize board grid
-		public BoardGrid() {
+		BoardGrid(int row, int col) {
+			// Assign board coordinates to this grid
+			this.col = col; this.row = row;
+			
 			// Make grid responsive to mouse click
 			addMouseListener(new MouseAdapter() {
 				public void mousePressed(MouseEvent e) {
-					// Add game logic
-					if (status == Status.EMPTY && board.getTurn() == Status.PLAYER_X) {
-						status = Status.PLAYER_X;
+					// Add game logic for user
+					if (board.getGridStatus(row, col) == Status.EMPTY && board.getTurn() == Status.PLAYER_X) {
+						board.makeMove(row, col, Status.PLAYER_X); System.out.println(board);
+						repaint(); // sign marked by move made above
+						Status gameStatus = board.getGameStatus();
+						if (gameStatus != Status.IN_PROGRESS) {
+							Utilities.showResult(gameStatus);
+							board.reset();
+							board.repaint();
+							return;
+						}
 						board.setTurn(Status.PLAYER_O);
-						repaint();
 						if (executor.isShutdown()) {
-							System.out.println("Start new queue");
+							System.out.println("Start new queue if executor was shutdown for eny reason");
 							executor = Executors.newSingleThreadExecutor();
 						}
+						// Schedule computer move computation
 						ComputerMove task = new ComputerMove(board);
 						executor.execute(task);
 						System.out.println(task + " schedulled");
@@ -109,62 +162,70 @@ class BoardWindow extends JDialog {
 			});
 		}
 
+		// Draw grid 
 		public void paintComponent(Graphics g) {
 			super.paintComponent(g);
-			// Draw grid border
-			int x1 = 1, y1 = 1;
-			int x2 = getSize().width - 2, y2 = getSize().height - 2;
-			g.drawRect(x1, y1, x2, y2);
 			
-			// Draw sign based on grid state
-			x1 = x2 / 4; y1 = y2 / 4;
-			int wide = x2 / 2, high = y2 / 2;
-			if (status == Status.PLAYER_X) {
-				g.drawLine(x1, y1, x1 + wide, y1 + high);
-				g.drawLine(x1, y1 + high, x1 + wide, y1);
+			// Draw grid border
+			int cornerX = 1, cornerY = 1;
+			int width = getSize().width - 2, height = getSize().height - 2;
+			
+			g.drawRect(cornerX, cornerY, width, height);
+
+			// Draw sign based on grid status
+			Graphics2D g2 = (Graphics2D) g;
+			g2.setStroke(new BasicStroke(3));
+			cornerX = width / 4; cornerY = height / 4;
+			width = width / 2; height = height / 2;
+			
+			if (board.getGridStatus(row, col) == Status.PLAYER_X) {
+				g.drawLine(cornerX, cornerY, cornerX + width, cornerY + height);
+				g.drawLine(cornerX, cornerY + height, cornerX + width, cornerY);
+			} else if (board.getGridStatus(row, col) == Status.PLAYER_O) {
+				//g.setColor(Color.BLUE);
+				g.drawOval(cornerX, cornerY, cornerX + width / 2, cornerY + height / 2);
 			}
-			if (status == Status.PLAYER_O)
-				g.drawOval(x1, y1, x1 + wide / 2, y1 + high / 2);
 		}
 	}
 }
 
-/*
- * Main Tic Tac Toe game window
+/**
+ * Main Tic Tac Toe game window 
  */
 public class TTTGame {
-	private int rows = 3, cols = 3;
-	
-	/*
-	 * Input data panel setup
+	private int dim = 3, cols = 3;
+
+	/**
+	 * Input data panel
+	 * Code is based on Oracle sample
 	 */
 	class SpinnerPanel extends JPanel {
-	    public SpinnerPanel() {
-	        super(new SpringLayout());
+		public SpinnerPanel() {
+			super(new SpringLayout());
 
-	        String[] labels = {"Board dimension: "};
-	        int numPairs = labels.length;
+			String[] labels = { "Board dimension: " };
+			int numPairs = labels.length;
 
-	        //Add the first labeled spinner
-	        SpinnerModel rowsModel = new SpinnerNumberModel(rows, rows - 0, rows + 3, 1);
-	        JSpinner rowsSpinner = addLabeledSpinner(this, labels[0], rowsModel);
+			// Add the first labeled spinner
+			SpinnerModel rowsModel = new SpinnerNumberModel(dim, dim - 0, dim + 3, 1);
+			JSpinner rowsSpinner = addLabeledSpinner(this, labels[0], rowsModel);
 
-	        //Lay out the panel: rows, initX, initY, xPad, yPad
-	        SpringUtilities.makeCompactGrid(this, numPairs, 2, 10, 10, 6, 10);
-	        
-	        rowsSpinner.addChangeListener( (e) -> rows = (int) rowsModel.getValue());
-	    }
+			// Lay out the panel: rows, initX, initY, xPad, yPad
+			SpringUtilities.makeCompactGrid(this, numPairs, 2, 10, 10, 6, 10);
 
-	    protected JSpinner addLabeledSpinner(Container c, String label, SpinnerModel model) {
-	        JLabel l = new JLabel(label);
-	        c.add(l);
+			rowsSpinner.addChangeListener((e) -> dim = (int) rowsModel.getValue());
+		}
 
-	        JSpinner spinner = new JSpinner(model);
-	        l.setLabelFor(spinner);
-	        c.add(spinner);
+		protected JSpinner addLabeledSpinner(Container c, String label, SpinnerModel model) {
+			JLabel l = new JLabel(label);
+			c.add(l);
 
-	        return spinner;
-	    }
+			JSpinner spinner = new JSpinner(model);
+			l.setLabelFor(spinner);
+			c.add(spinner);
+
+			return spinner;
+		}
 	}
 
 	// Initialize main window
@@ -174,28 +235,29 @@ public class TTTGame {
 
 		// Add input data panel
 		frame.add(new SpinnerPanel());
-			
-		// Add button to start the game
+
+		// Define button to start the game
 		JButton btnNewGame = new JButton("New game");
-		btnNewGame.addActionListener( (e) -> {
-			JDialog board = new BoardWindow(null, rows, rows);
+		btnNewGame.addActionListener((e) -> {
+			JDialog board = new BoardWindow(null, dim);
 			board.setVisible(true);
 		});
-		
-		// Add button to exit the game
+
+		// Define button to exit the game
 		JButton btnExit = new JButton("Exit");
-		btnExit.addActionListener( (e) -> System.exit(0) );
-		
+		btnExit.addActionListener((e) -> System.exit(0));
+
+		// Add buttons
 		frame.add(btnExit, BorderLayout.WEST);
 		frame.add(btnNewGame, BorderLayout.EAST);
-		
+
 		// Display the main window
 		frame.pack();
 		frame.setVisible(true);
 	}
 
+	// Run the game
 	public static void main(String[] args) {
-		// Run the game
 		SwingUtilities.invokeLater(new Runnable() {
 			public void run() {
 				new TTTGame();

@@ -11,11 +11,11 @@ import java.util.concurrent.TimeUnit;
 /**
  * @author Mario Misiuna
  * General GUI design idea based on Bruce Eckiel
- * TicTacToe.java printed in Thinking in Java book
+ * TicTacToe.java printed in "Thinking in Java" book
  */
 
-class Utilities {
-	private Utilities() {};
+class GUIUtils {
+	private GUIUtils() {};
 	
 	public static void showResult(Status status) {
 		String message = "";
@@ -27,7 +27,7 @@ class Utilities {
 			message = "Computer Won!";
 			break;
 		case PLAYER_X:
-			message = "Player Won!";
+			message = "You Won!";
 			break;
 		default:
 			break;
@@ -35,6 +35,7 @@ class Utilities {
 
 		JOptionPane.showMessageDialog(null,
 	            message, "Komunikat", JOptionPane.INFORMATION_MESSAGE);
+		System.out.println("Start new GAMEPLAY:");
 	}
 }
 /**
@@ -50,31 +51,30 @@ class ComputerMove implements Runnable {
 	}
 
 	public void run() {
-		System.out.println(this + " I'm thinking ...");
+		System.out.println(this + " - thinking ...");
 		try {
-			TimeUnit.SECONDS.sleep(1);
+			Move move = TTTModel.makeNextMove(board, board.getTurn());
+			if (move != null) {
+				System.out.println("Move found: " + move);
+				board.getGridPanel(move.getRow(), move.getCol()).repaint();
+				System.out.println(board);
+				Status gameStatus = board.getGameResult();
+				if (gameStatus != Status.IN_PROGRESS) {
+					GUIUtils.showResult(gameStatus);
+					board.reset();
+					board.repaint();
+				}
+			}
 		} catch (InterruptedException e) {
-			System.out.println(this + " interrupted");
+			System.out.println(this + " - interrupted");
 			return;
 		}
-		// Add game logic for computer move
-		Move move = board.doNextRandomMove();
-		if (move != null) {
-			board.getGridPanel(move.getRow(), move.getCol()).repaint();
-			System.out.println(board);
-			Status gameStatus = board.getGameStatus();
-			if (gameStatus != Status.IN_PROGRESS) {
-				Utilities.showResult(gameStatus);
-				board.reset();
-				board.repaint();
-			}
-		}
 		board.setTurn(Status.PLAYER_X);
-		System.out.println(this + " finished");
+		System.out.println(this + " - finished");
 	}
 
 	public String toString() {
-		return "Task " + id;
+		return "Computer move nr " + id;
 	}
 
 	public long id() {
@@ -83,7 +83,7 @@ class ComputerMove implements Runnable {
 }
 
 /**
- * Game board window
+ * Game board window used to run gameplay
  */
 class BoardWindow extends JDialog {
 	// Start with cross
@@ -93,6 +93,8 @@ class BoardWindow extends JDialog {
 	// Initialize game board
 	BoardWindow(JFrame parent, int dim) {
 		super(parent, "Gameplay", true);
+		// Used when we comment out above line to allow to run many gameplays from one main window
+		//setTitle("Gameplay");  
 
 		// Initialize board model
 		board = new TTTBoard(dim);
@@ -102,17 +104,16 @@ class BoardWindow extends JDialog {
 		for (int i = 0; i < dim; i++) {
 			for (int j = 0; j < dim; j++) {
 				BoardGrid bg = new BoardGrid(i, j);
-				board.assignePanelToGrid(i, j, bg);
+				board.assignPanelToGrid(i, j, bg);
 				add(bg);
 			}
 		}
 
 		// ((limitMax - limitMin) * (baseMax - value) / (baseMax - baseMin)) + limitMin;
 		int boxSize = (int) ((15 * (6 - dim) / 3) + 90);
-
 		setSize(dim * boxSize, dim * boxSize);
-		// setDefaultCloseOperation(DISPOSE_ON_CLOSE);
 
+		// setDefaultCloseOperation(DISPOSE_ON_CLOSE);
 		// Shutdown computer move computation thread
 		addWindowListener(new WindowAdapter() {
 			@Override
@@ -139,24 +140,24 @@ class BoardWindow extends JDialog {
 				public void mousePressed(MouseEvent e) {
 					// Add game logic for user
 					if (board.getGridStatus(row, col) == Status.EMPTY && board.getTurn() == Status.PLAYER_X) {
-						board.makeMove(row, col, Status.PLAYER_X); System.out.println(board);
+						board.move(row, col, Status.PLAYER_X); System.out.println(board);
 						repaint(); // sign marked by move made above
-						Status gameStatus = board.getGameStatus();
-						if (gameStatus != Status.IN_PROGRESS) {
-							Utilities.showResult(gameStatus);
+						Status gameResult = board.getGameResult();
+						if (gameResult != Status.IN_PROGRESS) {
+							GUIUtils.showResult(gameResult);
 							board.reset();
 							board.repaint();
 							return;
 						}
 						board.setTurn(Status.PLAYER_O);
 						if (executor.isShutdown()) {
-							System.out.println("Start new queue if executor was shutdown for eny reason");
+							System.out.println("Start new queue if executor was shutdown for eny reason!");
 							executor = Executors.newSingleThreadExecutor();
 						}
 						// Schedule computer move computation
 						ComputerMove task = new ComputerMove(board);
 						executor.execute(task);
-						System.out.println(task + " schedulled");
+						System.out.println(task + " - schedulled");
 					}
 				}
 			});
@@ -239,8 +240,12 @@ public class TTTGame {
 		// Define button to start the game
 		JButton btnNewGame = new JButton("New game");
 		btnNewGame.addActionListener((e) -> {
+			System.out.println("Start new GAMEPLAY:");
 			JDialog board = new BoardWindow(null, dim);
 			board.setVisible(true);
+			// Printed properly only when one gameplay is allowed
+			// Otherwise it will be printed just after "Start the GAMEPLAY:"
+			System.out.println("End this GAMEPLAY");
 		});
 
 		// Define button to exit the game

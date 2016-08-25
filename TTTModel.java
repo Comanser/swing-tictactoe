@@ -1,6 +1,8 @@
 package games.tictactoe;
 
 import java.util.*;
+import java.util.concurrent.TimeUnit;
+
 import javax.swing.JPanel;
 
 /**
@@ -9,13 +11,24 @@ import javax.swing.JPanel;
 
 enum Status { EMPTY, PLAYER_X, PLAYER_O, DRAW, IN_PROGRESS }
 
+class ModelUtils {
+	private ModelUtils() {}
+	
+	public static Status switch_player(Status player) {
+		if (player == Status.PLAYER_X)
+	        return Status.PLAYER_O;
+	    else
+	    	return Status.PLAYER_X;
+	}
+}
+
 /**
  * Move holder 
  */
-class Move {
+class Move implements Comparable<Move> {
 	private final int row;
 	private final int col;
-	private Status score;
+	private int score;
 	
 	public Move (int row, int col) {
 		this.row = row;
@@ -30,13 +43,26 @@ class Move {
 		return col;
 	}
 
-	public Status getScore() {
+	public int getScore() {
 		return score;
 	}
 
-	public void setScore(Status score) {
+	public void setScore(int score) {
 		this.score = score;
 	}
+	
+	@Override
+	public String toString() {
+		return "( " + getRow() + ", " + getCol() + " ): " + getScore();
+	}
+
+	/*
+	 * Method allows to sort list of Move object
+	 */
+	@Override
+	public int compareTo(Move o) {
+		return score < o.score ? -1 : ( score == o.score ? 0 : 1 );
+	}	
 }
 
 /*
@@ -56,7 +82,7 @@ class TTTBoard implements Cloneable {
 	}
 
 	/**
-	 * Initialize the empty board with the given dimension [dim, dim]
+	 * Initialize empty board with the given dimension [dim, dim]
 	 */
 	public TTTBoard(int dim) {
 		this.dim = dim;
@@ -117,32 +143,31 @@ class TTTBoard implements Cloneable {
 	
 	/**
 	 * 
-	 * @return empty grids as list of Move objects - next move options
+	 * @return empty grids as list of next potential moves
 	 */
-	public List<Move> getEmptyGrids() {
-		List<Move> emptyGrids = new ArrayList<>();
+	public List<Move> getPotentialMoves() {
+		List<Move> potentialMoves = new ArrayList<>();
 		
 		for (int row = 0; row < dim; row++)
 			for (int col = 0; col < dim; col++)
 				if (gridStatus[row][col] == Status.EMPTY) {
-					emptyGrids.add(new Move(row, col));
+					potentialMoves.add(new Move(row, col));
 				};
 		
-		return emptyGrids;
+		return potentialMoves;
 	}
 	
 	/**
 	 * Do random move if possible
 	 */
 	public Move doNextRandomMove() {
-		List<Move> moves = getEmptyGrids();
-		if (moves.size() > 0) {
-			//long seed = System.nanoTime();
-			//Collections.shuffle(moves, new Random(seed));
-			Collections.shuffle(moves);
-			Move move = moves.get(0);
-			makeMove(move.getRow(), move.getCol(), getTurn());
-			return move;
+		List<Move> potentialMoves = getPotentialMoves();
+		System.out.println(potentialMoves);
+		if (potentialMoves.size() > 0) {
+			Collections.shuffle(potentialMoves);
+			Move pickedMove = potentialMoves.get(0);
+			makeMove(pickedMove, getTurn());
+			return pickedMove;
 		}
 		return null;
 	}
@@ -154,10 +179,19 @@ class TTTBoard implements Cloneable {
 	 * @param col
 	 * @param player
 	 */
-	public void makeMove(int row, int col, Status player) {
+	protected void move(int row, int col, Status player) {
 		if (gridStatus[row][col] == Status.EMPTY) {
 			gridStatus[row][col] = player;
 		}
+	}
+	
+	/**
+	 * More convenient version of move method 
+	 * @param move
+	 * @param player
+	 */
+	public void makeMove(Move move, Status player) {
+		move(move.getRow(), move.getCol(), player);
 	}
 	
 	/**
@@ -166,55 +200,56 @@ class TTTBoard implements Cloneable {
 	 * 	- DRAW If game ended as tie
 	 * 	- IN_PROGRESS If game is in progress
 	 */
-	public Status getGameStatus() {
+	public Status getGameResult() {
 		List<List<Status>> lines = new ArrayList<>();
-		List<Status> line;
+		List<Status> newLine;
 		
+		// Add all possible winning lines to the "lines" list
 		// Add rows
 		for (int row = 0; row < dim; row++) {
-			line = new ArrayList<>();
+			newLine = new ArrayList<>();
 			for (int col = 0; col < dim; col++)
-				line.add(gridStatus[row][col]);
-			lines.add(line);
+				newLine.add(gridStatus[row][col]);
+			lines.add(newLine);
 		}
 		
 		// Add columns
 		for (int col = 0; col < dim; col++) {
-			line = new ArrayList<>();
+			newLine = new ArrayList<>();
 			for (int row = 0; row < dim; row++)
-				line.add(gridStatus[row][col]);
-			lines.add(line);
+				newLine.add(gridStatus[row][col]);
+			lines.add(newLine);
 		}
 		
 		// Add diagonals
-		line = new ArrayList<>();
+		newLine = new ArrayList<>();
 		for (int row = 0; row < dim; row++)
-			line.add(gridStatus[row][row]);
-		lines.add(line);
+			newLine.add(gridStatus[row][row]);
+		lines.add(newLine);
 		
-		line = new ArrayList<>();
+		newLine = new ArrayList<>();
 		for (int row = 0; row < dim; row++)
-			line.add(gridStatus[dim-row-1][row]);
-		lines.add(line);
+			newLine.add(gridStatus[dim-row-1][row]);
+		lines.add(newLine);
 		
 		// Check for winner
-		for (List<Status> ln : lines)
-			if (ln.get(0) != Status.EMPTY && new HashSet<>(ln).size() == 1)
-					return ln.get(0);
+		for (List<Status> line : lines)
+			if (line.get(0) != Status.EMPTY && new HashSet<>(line).size() == 1)
+					return line.get(0);
 		
 		// Check for draw
-		if (getEmptyGrids().size() == 0)
+		if (getPotentialMoves().size() == 0)
 			return Status.DRAW;
 		else
 			return Status.IN_PROGRESS;
 	}
 	
 	public boolean isGameOver() {
-		return getGameStatus() == Status.DRAW; 
+		return getGameResult() == Status.DRAW; 
 	}
 
 	/**
-	 * Get deep copy of TTTBoard
+	 * Get deep copy of TTTBoard excluding gridPanel array
 	 */
 	@Override
 	public TTTBoard clone() {
@@ -234,7 +269,7 @@ class TTTBoard implements Cloneable {
 	 */
 	@Override public String toString() {
 		String str = "Board (dim " + dim + "): " +
-				getGameStatus();
+				getGameResult();
 		for (Status[] status : gridStatus)
 			str += "\n" + Arrays.toString(status);
 		return str;
@@ -245,7 +280,7 @@ class TTTBoard implements Cloneable {
 		return gridPanel[row][col];
 	}
 
-	public void assignePanelToGrid(int col, int row, JPanel jp) {
+	public void assignPanelToGrid(int col, int row, JPanel jp) {
 		gridPanel[row][col] = jp;
 	}
 
@@ -264,6 +299,23 @@ class TTTBoard implements Cloneable {
 		this.turn = turn;
 	}
 }
+/**
+ * Scoring values for MiniMax algorithm 
+ */
+class MiniMaxScores {
+	Map<Status, Integer> scores;
+	
+	public MiniMaxScores() {
+		scores = new HashMap<>();
+		scores.put(Status.PLAYER_X, 1);
+		scores.put(Status.DRAW, 0);
+		scores.put(Status.PLAYER_O, -1);
+	}
+	
+	public int getScore(Status status) {
+		return scores.get(status);
+	}
+}
 
 /*
  * Tic Tac Toe AI algorithm
@@ -276,10 +328,63 @@ public class TTTModel {
 	 * @param
 	 * 
 	 * @return an object with 2 elements. The first element is the score of the
-	 * given board and the second element is the desired move as a Grid object
+	 * given board and the second element is the desired move as a Move object
 	 */
-	public static void MinimaxMove() {
-
+	public static Move getMiniMaxMove(TTTBoard board, Status player) throws InterruptedException {
+		MiniMaxScores miniMaxScores = new MiniMaxScores();
+		List<Move> moves = new ArrayList<>();
+		
+		List<Move> potentialMoves = board.getPotentialMoves();
+		Collections.shuffle(potentialMoves);
+		
+		Move move, dummyMove;
+		TTTBoard boardClone;
+		Status gameStatus;
+		int score;
+		while (potentialMoves.size() > 0) {
+			if(Thread.currentThread().isInterrupted()) throw new InterruptedException();
+			move = potentialMoves.remove(potentialMoves.size()-1);
+			boardClone = board.clone();
+			boardClone.makeMove(move, player);
+			gameStatus = boardClone.getGameResult();
+			if (gameStatus != Status.IN_PROGRESS) {
+				score = miniMaxScores.getScore(gameStatus);
+				if (score * miniMaxScores.getScore(player) == 1) {
+					move.setScore(score);
+					return move;  
+				}
+			} else {
+				dummyMove = getMiniMaxMove(boardClone, ModelUtils.switch_player(player));
+				score = dummyMove.getScore();
+				move.setScore(score);
+				if (score * miniMaxScores.getScore(player) == 1) {
+					return move;  
+				}
+			}
+			moves.add(move);
+		}
+		// Choose appropriate move based on current player
+		moves.sort(null);
+		if (player == Status.PLAYER_X) {
+			// set move to one with max score 
+			move = moves.get(moves.size() - 1);
+		} else {
+			// set move to one with min score 
+			move = moves.get(0);
+		}
+		//System.out.println(moves);
+		return move;
+	}
+	
+	public static Move makeNextMove(TTTBoard board, Status player) throws InterruptedException {
+		if (board.getDimension() > 3) {
+			if (board.getPotentialMoves().size() > 11) {
+				return board.doNextRandomMove();
+			}
+		}
+		Move move = getMiniMaxMove(board, player);
+		board.makeMove(move, player);
+		return move;
 	}
 
 	public static void main(String[] args) {
@@ -288,16 +393,16 @@ public class TTTModel {
 		System.out.println("dimension = " + b.getDimension());
 		System.out.println(b);
 		
-		TTTBoard c = b.clone(); c.makeMove(0, 0, Status.PLAYER_X);
+		TTTBoard c = b.clone(); c.move(0, 0, Status.PLAYER_X);
+		System.out.println("\nC "+c);
+		System.out.println("\nB "+b);
+			
+		for (int i = 0; i < b.getDimension(); i++)
+			for (int j = 0; j < b.getDimension(); j++)
+				b.move(i, j, Status.values()[new Random().nextInt(Status.values().length)]);
 		System.out.println("\nB "+b);
 		System.out.println("\nC "+c);
-		
-		for (int i = 0; i < c.getDimension(); i++)
-			for (int j = 0; j < c.getDimension(); j++)
-				c.makeMove(i, j, Status.PLAYER_X);
-		System.out.println("\nC "+c);
-
-		b.makeMove(1, 1, Status.PLAYER_O);
-		System.out.println("\nB "+b);
+		System.out.println(c.getPotentialMoves());
+		//getMiniMaxMove(c, Status.PLAYER_X);
 	}
 }

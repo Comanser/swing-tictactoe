@@ -38,16 +38,19 @@ class GUIUtils {
 		System.out.println("Start new GAMEPLAY:");
 	}
 }
+
 /**
- * Thread used to finding out the best computer move
+ * Thread used to find the best computer move
  */
 class ComputerMove implements Runnable {
 	private static int counter = 0;
 	private final int id = counter++;
 	private TTTBoard board; // current TTTBoard
+	ExecutorService executor; 
 
-	public ComputerMove(TTTBoard board) {
+	public ComputerMove(TTTBoard board, ExecutorService executor) {
 		this.board = board;
+		this.executor = executor;
 	}
 
 	public void run() {
@@ -56,13 +59,24 @@ class ComputerMove implements Runnable {
 			Move move = TTTModel.makeNextMove(board, board.getTurn());
 			if (move != null) {
 				System.out.println("Move found: " + move);
-				board.getGridPanel(move.getRow(), move.getCol()).repaint();
 				System.out.println(board);
+				board.getGridPanel(move.getRow(), move.getCol()).repaint();
 				Status gameStatus = board.getGameResult();
 				if (gameStatus != Status.IN_PROGRESS) {
 					GUIUtils.showResult(gameStatus);
 					board.reset();
 					board.repaint();
+					if (board.getStartingPlayer() == Status.PLAYER_X) {
+						System.out.println(this + " - finished");
+						board.setStartingPlayer(Status.PLAYER_O);
+						board.setTurn(Status.PLAYER_O);
+						ComputerMove task = new ComputerMove(board, executor);
+						executor.execute(task);
+						System.out.println(task + " - schedulled");
+						return;
+					} else {
+						board.setStartingPlayer(Status.PLAYER_X);
+					}
 				}
 			}
 		} catch (InterruptedException e) {
@@ -94,7 +108,7 @@ class BoardWindow extends JDialog {
 	BoardWindow(JFrame parent, int dim) {
 		super(parent, "Gameplay", true);
 		// Used when we comment out above line to allow to run many gameplays from one main window
-		//setTitle("Gameplay");  
+		//setTitle("Gameplay");
 
 		// Initialize board model
 		board = new TTTBoard(dim);
@@ -147,15 +161,21 @@ class BoardWindow extends JDialog {
 							GUIUtils.showResult(gameResult);
 							board.reset();
 							board.repaint();
-							return;
+							if (board.getStartingPlayer() == Status.PLAYER_O) {
+								board.setStartingPlayer(Status.PLAYER_X);
+								return;
+							} else {
+								board.setStartingPlayer(Status.PLAYER_O);
+							}
 						}
+						
+						// Schedule computer move computation
 						board.setTurn(Status.PLAYER_O);
 						if (executor.isShutdown()) {
 							System.out.println("Start new queue if executor was shutdown for eny reason!");
 							executor = Executors.newSingleThreadExecutor();
 						}
-						// Schedule computer move computation
-						ComputerMove task = new ComputerMove(board);
+						ComputerMove task = new ComputerMove(board, executor);
 						executor.execute(task);
 						System.out.println(task + " - schedulled");
 					}

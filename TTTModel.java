@@ -7,6 +7,10 @@ import javax.swing.JPanel;
 
 /**
  * @author Mario Misiuna 
+ * 
+ * TicTacToe game model with implemented MiniMax AI algorithm
+ * Computer never loose and win if it is possible.
+ * 
  */
 
 enum Status { EMPTY, PLAYER_X, PLAYER_O, DRAW, IN_PROGRESS }
@@ -73,6 +77,7 @@ class TTTBoard implements Cloneable {
 	private Status[][] gridStatus;
 	private JPanel[][] gridPanel;
 	private Status turn = Status.PLAYER_X;
+	private Status startingPlayer = Status.PLAYER_X;
 	
 	/**
 	 * Initialize empty standard ([3, 3]) Tic Tac Toe game board
@@ -114,15 +119,6 @@ class TTTBoard implements Cloneable {
 			for (int col = 0; col < dim; col++)
 				gridStatus[row][col] = Status.EMPTY;
 	}
-	
-	/**
-	 * Repaint whole board
-	 */
-	public void repaint() {
-		for (int row = 0; row < dim; row++)
-			for (int col = 0; col < dim; col++)
-				gridPanel[row][col].repaint();
-	}
 
 	/**
 	 * 
@@ -142,39 +138,8 @@ class TTTBoard implements Cloneable {
 	}
 	
 	/**
-	 * 
-	 * @return empty grids as list of next potential moves
-	 */
-	public List<Move> getPotentialMoves() {
-		List<Move> potentialMoves = new ArrayList<>();
-		
-		for (int row = 0; row < dim; row++)
-			for (int col = 0; col < dim; col++)
-				if (gridStatus[row][col] == Status.EMPTY) {
-					potentialMoves.add(new Move(row, col));
-				};
-		
-		return potentialMoves;
-	}
-	
-	/**
-	 * Do random move if possible
-	 */
-	public Move doNextRandomMove() {
-		List<Move> potentialMoves = getPotentialMoves();
-		System.out.println(potentialMoves);
-		if (potentialMoves.size() > 0) {
-			Collections.shuffle(potentialMoves);
-			Move pickedMove = potentialMoves.get(0);
-			makeMove(pickedMove, getTurn());
-			return pickedMove;
-		}
-		return null;
-	}
-	
-	/**
-	 * Place player (PLAYERX or PLAYERO) on the board at position (row, col)
-	 * if pointed board grid is not empty
+	 * Place player sign (PLAYERX or PLAYERO) on the board
+	 * at position (row, col) if pointed board grid is not empty
 	 * @param row
 	 * @param col
 	 * @param player
@@ -195,7 +160,7 @@ class TTTBoard implements Cloneable {
 	}
 	
 	/**
-	 * @return the status of the game":
+	 * @return the result of the game:
 	 * 	- PLAYERX or PLAYERO If relevant won
 	 * 	- DRAW If game ended as tie
 	 * 	- IN_PROGRESS If game is in progress
@@ -204,7 +169,8 @@ class TTTBoard implements Cloneable {
 		List<List<Status>> lines = new ArrayList<>();
 		List<Status> newLine;
 		
-		// Add all possible winning lines to the "lines" list
+		// Add all possible winning lines to the lines list
+		
 		// Add rows
 		for (int row = 0; row < dim; row++) {
 			newLine = new ArrayList<>();
@@ -245,7 +211,23 @@ class TTTBoard implements Cloneable {
 	}
 	
 	public boolean isGameOver() {
-		return getGameResult() == Status.DRAW; 
+		return getGameResult() != Status.IN_PROGRESS; 
+	}
+	
+	/**
+	 * 
+	 * @return empty grids as list of next potential moves
+	 */
+	public List<Move> getPotentialMoves() {
+		List<Move> potentialMoves = new ArrayList<>();
+		
+		for (int row = 0; row < dim; row++)
+			for (int col = 0; col < dim; col++)
+				if (gridStatus[row][col] == Status.EMPTY) {
+					potentialMoves.add(new Move(row, col));
+				};
+		
+		return potentialMoves;
 	}
 
 	/**
@@ -283,6 +265,15 @@ class TTTBoard implements Cloneable {
 	public void assignPanelToGrid(int col, int row, JPanel jp) {
 		gridPanel[row][col] = jp;
 	}
+	
+	/**
+	 * Repaint whole board
+	 */
+	public void repaint() {
+		for (int row = 0; row < dim; row++)
+			for (int col = 0; col < dim; col++)
+				gridPanel[row][col].repaint();
+	}
 
 	/**
 	 * @return current game turn
@@ -298,7 +289,16 @@ class TTTBoard implements Cloneable {
 	public void setTurn(Status turn) {
 		this.turn = turn;
 	}
+
+	public Status getStartingPlayer() {
+		return startingPlayer;
+	}
+
+	public void setStartingPlayer(Status startingPlayer) {
+		this.startingPlayer = startingPlayer;
+	}
 }
+
 /**
  * Scoring values for MiniMax algorithm 
  */
@@ -339,16 +339,16 @@ public class TTTModel {
 		
 		Move move, dummyMove;
 		TTTBoard boardClone;
-		Status gameStatus;
+		Status gameResult;
 		int score;
 		while (potentialMoves.size() > 0) {
 			if(Thread.currentThread().isInterrupted()) throw new InterruptedException();
 			move = potentialMoves.remove(potentialMoves.size()-1);
 			boardClone = board.clone();
 			boardClone.makeMove(move, player);
-			gameStatus = boardClone.getGameResult();
-			if (gameStatus != Status.IN_PROGRESS) {
-				score = miniMaxScores.getScore(gameStatus);
+			gameResult = boardClone.getGameResult();
+			if (gameResult != Status.IN_PROGRESS) {
+				score = miniMaxScores.getScore(gameResult);
 				if (score * miniMaxScores.getScore(player) == 1) {
 					move.setScore(score);
 					return move;  
@@ -376,18 +376,84 @@ public class TTTModel {
 		return move;
 	}
 	
+	/**
+	 * @param board
+	 * @param player
+	 * @return winning move for given board and player or null if not exists
+	 */
+	public static Move getNextWinningMove(TTTBoard board, Status player) {
+		List<Move> potentialMoves = board.getPotentialMoves();
+		TTTBoard boardClone;
+		Move move;
+		
+		while (potentialMoves.size() > 0) {
+			move = potentialMoves.remove(potentialMoves.size()-1);
+			boardClone = board.clone();
+			boardClone.makeMove(move, player);
+			if (boardClone.getGameResult() == player) return move;
+		}
+		
+		return null;
+	}
+	
+	/**
+	 * Make random move for given player
+	 *  
+	 * @param board
+	 * @param player
+	 * @return random move for given player or null if not possible
+	 */
+	public static Move makeNextRandomMove(TTTBoard board, Status player) {
+		List<Move> potentialMoves = board.getPotentialMoves();
+		
+		System.out.println(potentialMoves);
+		if (potentialMoves.size() > 0) {
+			Collections.shuffle(potentialMoves);
+			Move pickedMove = potentialMoves.get(0);
+			board.makeMove(pickedMove, player);
+			return pickedMove;
+		}
+		return null;
+	}
+	
+	/**
+	 * Make next move for given board and player 
+	 * 
+	 * @param board
+	 * @param player
+	 * @return next move for given board and player or null if not possible
+	 * @throws InterruptedException
+	 */
 	public static Move makeNextMove(TTTBoard board, Status player) throws InterruptedException {
-		if (board.getDimension() > 3) {
-			if (board.getPotentialMoves().size() > 11) {
-				return board.doNextRandomMove();
+		Move move;
+		if (board.isGameOver()) return null;
+		
+		// Make winning move if exists
+		move = getNextWinningMove(board, player);
+		if (move != null) {
+			board.makeMove(move, player);
+			return move;
+		}
+		
+		// Speed up finding move for boards with dimension > 3 and 
+		// first move for board with dim = 3
+		if (board.getPotentialMoves().size() > 8) {
+			move = getNextWinningMove(board, ModelUtils.switch_player(player));
+			if (move != null) { // Block opponent winning move if exists
+				board.makeMove(move, player);
+				return move;
+			} else { // or if not exists
+				return makeNextRandomMove(board, player);
 			}
 		}
-		Move move = getMiniMaxMove(board, player);
+		
+		// Make minimax move
+		move = getMiniMaxMove(board, player);
 		board.makeMove(move, player);
 		return move;
 	}
 
-	public static void main(String[] args) {
+	public static void main(String[] args) throws InterruptedException {
 		System.out.println("Basic TTTBoard tests:");
 		TTTBoard b = new TTTBoard();
 		System.out.println("dimension = " + b.getDimension());
@@ -396,13 +462,21 @@ public class TTTModel {
 		TTTBoard c = b.clone(); c.move(0, 0, Status.PLAYER_X);
 		System.out.println("\nC "+c);
 		System.out.println("\nB "+b);
+		
+		for (int i = 0; i < b.getDimension(); i++)
+			for (int j = 0; j < b.getDimension(); j++)
+				b.move(i, j, Status.PLAYER_X);
+		System.out.println("\nB "+b);
+		System.out.println("Potential moves: " + b.getPotentialMoves());
+		System.out.println("Is game over? " + b.isGameOver());
 			
 		for (int i = 0; i < b.getDimension(); i++)
 			for (int j = 0; j < b.getDimension(); j++)
 				b.move(i, j, Status.values()[new Random().nextInt(Status.values().length)]);
 		System.out.println("\nB "+b);
 		System.out.println("\nC "+c);
-		System.out.println(c.getPotentialMoves());
-		//getMiniMaxMove(c, Status.PLAYER_X);
+		System.out.println("Potential moves: " + c.getPotentialMoves());
+		System.out.println("Is game over? " + c.isGameOver());
+		System.out.println("Get MiniMaxMove: " + getMiniMaxMove(c, Status.PLAYER_X));
 	}
 }
